@@ -25,39 +25,39 @@ do
 	# Work on T2 anatomical scan
 
 	echo "Working on T2 scan"
+  
+        # Reorient T2 scan to standard
+        fslreorient2std ${data_dir}${subj}/T2/T2.nii.gz ${output_dir}${subj}/T2_reoriented.nii.gz
 
-    # Reorient T2 scan to standard
-    fslreorient2std ${data_dir}${subj}/T2/T2.nii.gz ${output_dir}${subj}/T2_reoriented.nii.gz
-
-    # Apply BET to reoriented T2
-    bet ${output_dir}${subj}/T2_reoriented.nii.gz ${output_dir}${subj}/T2_reoriented_brain.nii.gz -B -f 0.2
-    ############################################################################################################
+        # Apply BET to reoriented T2
+        bet ${output_dir}${subj}/T2_reoriented.nii.gz ${output_dir}${subj}/T2_reoriented_brain.nii.gz -B -f 0.2
+        ############################################################################################################
 
   	############################################################################################################
 	# Work on T1 anatomical scan
 
-    # Subject 30 does not have a T1 scan
-    exclude=030
+        # Subject 30 does not have a T1 scan
+        exclude=030
 
-    if [ "${subj}" -ne "${exclude}" ]
+        if [ "${subj}" -ne "${exclude}" ]
 
-    then
+        then
 
-        echo "Working on T1 scan"
+        	echo "Working on T1 scan"
 
-        # Reorient T1 scan to standard
-        fslreorient2std ${data_dir}${subj}/T1/T1.nii.gz ${output_dir}${subj}/T1_reoriented.nii.gz
+        	# Reorient T1 scan to standard
+       	 	fslreorient2std ${data_dir}${subj}/T1/T1.nii.gz ${output_dir}${subj}/T1_reoriented.nii.gz
 
-        # Apply BET to reoriented T1
-        bet ${output_dir}${subj}/T1_reoriented.nii.gz ${output_dir}${subj}/T1_reoriented_brain.nii.gz -B -f 0.2
+        	# Apply BET to reoriented T1
+        	bet ${output_dir}${subj}/T1_reoriented.nii.gz ${output_dir}${subj}/T1_reoriented_brain.nii.gz -B -f 0.2
 
-    fi
-    ############################################################################################################  
+    	fi
+        ############################################################################################################  
 
-    # Loop over runs and pre-process fieldmap images
-    for run in 1 2 3 4 5 6
+        # Loop over runs and pre-process fieldmap images
+        for run in 1 2 3 4 5 6
 
-    do
+        do
 
     	############################################################################################################
         echo "Preparing fieldmaps for run ${run} for future unwarping"
