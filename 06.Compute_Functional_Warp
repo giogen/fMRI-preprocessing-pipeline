@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# Set this to the directory containing antsRegistration
+ANTSPATH=/usr/local/antsbin/bin
+
+# ITK thread count
+ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=1
+export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS
+
+# Loop over subjects and sessions, compute and apply functional warps
+for sbj in 0{01..32}
+
+do
+
+for ses in 1 2 3 4 5 6
+
+do
+
+echo "Running subject: ${sbj}, session ${ses}"
+
+# Set paths to the T1 structural scan, functional scans, and the standard anatomical image
+struct_path=/data/coins/data/${sbj}
+anat_path=/data/templates/CIT168toMNI152_700um
+func_path=/data/coins/data/${sbj}/run${ses}_melodic.ica
+
+# Assign arguments
+fixed_t1=`imglob -extension .nii.gz ${anat_path}/CIT168_T1w_MNI.nii.gz`
+fixed_t2=`imglob -extension .nii.gz ${anat_path}/CIT168_T2w_MNI.nii.gz`
+moving_t1=`imglob -extension .nii.gz ${struct_path}/T1_reoriented_brain.nii.gz`
+moving_t2=`imglob -extension .nii.gz ${struct_path}/T2_reoriented_brain_aligned_T1.nii.gz`
+
+# Prefix for output transform files
+outPrefix=${moving_t1%%.nii.gz}
+echo "Output prefix : $outPrefix"
+
+##############
+# Low-res T1/T2 atlas (only need to create once)
+#echo "Running Flirt to downsample T1 atlas $(date +"%T")"
+#flirt -ref $fixed_t1 -in $fixed_t1 -out ${anat_path}/CIT168_T1w_MNI_lowres.nii.gz -applyisoxfm 2.5 -omat ${anat_path}/CIT168_T1w_MNI_lowres.mat
+#
+# Low res T2
+#echo "Running Flirt to downsample T2 atlas $(date +"%T")"
+#flirt -ref $fixed_t2 -in $fixed_t2 -out ${anat_path}/CIT168_T2w_MNI_lowres.nii.gz -applyisoxfm 2.5 -omat ${anat_path}/CIT168_T2w_MNI_lowres.mat
+##############
+
+# Extract a sample to speed up processing
+echo "Extract volume sample to speed processing at $(date +"%T")"
+fslroi ${func_path}/filtered_func_data_clean_unwarped.nii.gz ${func_path}/filtered_func_data_clean_unwarped_sample_1.nii.gz 0 1
+
+echo "Extract mean functional image and apply bias correction"
+fslmaths ${func_path}/filtered_func_data_clean_unwarped -Tmean ${func_path}/filtered_func_data_clean_unwarped_mean
+
+# Apply bias correction to mean functional image
+/usr/local/antsbin/bin/N4BiasFieldCorrection -i ${func_path}/filtered_func_data_clean_unwarped_mean.nii.gz -o ${func_path}/filtered_func_data_clean_unwarped_mean_nobias.nii.gz --convergence [50x50x30x20,0.0] -d 3
+
+# Re-run bet to potentially improve brain extraction
+bet ${func_path}/filtered_func_data_clean_unwarped_mean_nobias ${func_path}/filtered_func_data_clean_unwarped_mean_nobias -f 0.25 -R
+
+# Get the functionals into alignment with the structural
+echo "Running Flirt func to struct $(date +"%T")"
+flirt -ref $moving_t2 -in ${func_path}/filtered_func_data_clean_unwarped_mean_nobias -dof 6 -cost normcorr -out ${func_path}/tmp_func_to_struct -omat ${func_path}/tmp_func_to_struct.mat
+
+flirt -ref $moving_t2 -in ${func_path}/filtered_func_data_clean_unwarped_mean_nobias -dof 12 -cost normcorr -init ${func_path}/tmp_func_to_struct.mat -nosearch -out ${func_path}/tmp_func_to_struct_improved -omat ${fun$
+
+# Convert functionals into a format ANTs can use
+echo "Converting fsl transformation to ras format at $(date +"%T")"
+c3d_affine_tool -ref $moving_t2 -src ${func_path}/filtered_func_data_clean_unwarped_mean_nobias ${func_path}/tmp_func_to_struct.mat -fsl2ras -oitk ${func_path}/itk_transformation_func_to_struct.txt
+
+# Convert T2 into a format ANTs can use
+#echo "Converting fsl transformation to ras format at $(date +"%T")"
+#c3d_affine_tool -ref ${anat_path}/CIT168_T2w_MNI_lowres -src $fixed_t2 ${anat_path}/CIT168_T2w_MNI_lowres.mat -fsl2ras -oitk ${func_path}/itk_transformation_hires_to_lowres.txt
+
+# Run multi-volume transform
+echo "Apply series of transformations all the way from func to lowres atlas (in MNI space)"
+${ANTSPATH}/WarpTimeSeriesImageMultiTransform 4 ${func_path}/filtered_func_data_clean_unwarped.nii.gz ${func_path}/filtered_func_data_clean_unwarped_ANTsWarp.nii.gz \
+        -R ${anat_path}/CIT168_T2w_MNI_lowres.nii.gz \
+    ${outPrefix}_xfm1Warp.nii.gz ${outPrefix}_xfm0GenericAffine.mat \
+    ${func_path}/itk_transformation_func_to_struct.txt
+echo "done ants (in MNI space) at $(date +"%T")"
+
+done
+
+done
